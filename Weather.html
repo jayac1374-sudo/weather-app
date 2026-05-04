@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Advanced DOM Weather App</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial;
+            min-height: 100vh;
+            margin: 0;
+            padding: 30px;
+            background: linear-gradient(135deg, #74ebd5, #9face6);
+        }
+
+        .container {
+            max-width: 520px;
+            margin: auto;
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h2 {
+            margin-bottom: 20px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 8px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+        }
+
+        button {
+            padding: 12px;
+            border: none;
+            background: #007bff;
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .location-btn {
+            margin-top: 10px;
+            width: 100%;
+            background: #28a745;
+        }
+
+        .location-btn:hover {
+            background: #1e7e34;
+        }
+
+        #suggestions {
+            margin-top: 8px;
+            text-align: left;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            display: none;
+            overflow: hidden;
+        }
+
+        .suggestion-item {
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        .suggestion-item:hover {
+            background: #eee;
+        }
+
+        .weather-box {
+            margin-top: 25px;
+            display: none;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        .weather-card {
+            background: #f8f9fa;
+            border-radius: 18px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .icon {
+            font-size: 60px;
+        }
+
+        .temp {
+            font-size: 45px;
+            font-weight: bold;
+        }
+
+        .details {
+            margin-top: 10px;
+            font-size: 17px;
+        }
+
+        .forecast {
+            margin-top: 25px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+        }
+
+        .forecast-card {
+            background: #eef3ff;
+            border-radius: 12px;
+            padding: 10px;
+            font-size: 14px;
+        }
+
+        .forecast-icon {
+            font-size: 28px;
+        }
+
+        .error {
+            color: red;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .forecast {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .search-box {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+    <h2>🌦️ Weather App</h2>
+
+    <div class="search-box">
+        <input type="text" id="cityInput" placeholder="Enter city name" onkeyup="showSuggestions()">
+        <button onclick="getWeather()">Search</button>
+    </div>
+
+    <button class="location-btn" onclick="getCurrentLocationWeather()">📍 Use Current Location</button>
+
+    <div id="suggestions"></div>
+
+    <p id="error" class="error"></p>
+
+    <div id="weatherBox" class="weather-box">
+        <div class="weather-card">
+            <h3 id="cityName"></h3>
+            <div class="icon" id="weatherIcon"></div>
+            <div class="temp" id="temperature"></div>
+            <div class="details" id="condition"></div>
+            <div class="details" id="wind"></div>
+        </div>
+
+        <h3>5-Day Forecast</h3>
+        <div class="forecast" id="forecast"></div>
+    </div>
+</div>
+
+<script>
+    let selectedLocation = null;
+
+    function showSuggestions() {
+        let city = document.getElementById("cityInput").value.trim();
+        let suggestions = document.getElementById("suggestions");
+
+        suggestions.innerHTML = "";
+        suggestions.style.display = "none";
+        selectedLocation = null;
+
+        if (city.length < 3) {
+            return;
+        }
+
+        let geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=5`;
+
+        fetch(geoUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.results) {
+                    return;
+                }
+
+                suggestions.style.display = "block";
+
+                data.results.forEach(location => {
+                    let div = document.createElement("div");
+                    div.className = "suggestion-item";
+
+                    div.innerText = `${location.name}, ${location.admin1 || ""}, ${location.country}`;
+
+                    div.onclick = function () {
+                        document.getElementById("cityInput").value = location.name;
+                        selectedLocation = location;
+                        suggestions.style.display = "none";
+                    };
+
+                    suggestions.appendChild(div);
+                });
+            });
+    }
+
+    function getWeather() {
+        let city = document.getElementById("cityInput").value.trim();
+        let error = document.getElementById("error");
+
+        error.innerText = "";
+        document.getElementById("weatherBox").style.display = "none";
+
+        if (city === "") {
+            error.innerText = "Please enter a city name";
+            return;
+        }
+
+        if (selectedLocation) {
+            fetchWeather(selectedLocation.latitude, selectedLocation.longitude, selectedLocation.name + ", " + selectedLocation.country);
+            return;
+        }
+
+        let geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1`;
+
+        fetch(geoUrl)
+            .then(response => response.json())
+            .then(geoData => {
+                if (!geoData.results || geoData.results.length === 0) {
+                    error.innerText = "City not found. Please select from suggestions.";
+                    return;
+                }
+
+                let location = geoData.results[0];
+
+                fetchWeather(
+                    location.latitude,
+                    location.longitude,
+                    location.name + ", " + location.country
+                );
+            })
+            .catch(() => {
+                error.innerText = "Something went wrong. Check internet connection.";
+            });
+    }
+
+    function getCurrentLocationWeather() {
+        let error = document.getElementById("error");
+
+        error.innerText = "";
+        document.getElementById("weatherBox").style.display = "none";
+
+        if (!navigator.geolocation) {
+            error.innerText = "Geolocation is not supported by your browser.";
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                let latitude = position.coords.latitude;
+                let longitude = position.coords.longitude;
+
+                fetchWeather(latitude, longitude, "Your Current Location");
+            },
+            function() {
+                error.innerText = "Location permission denied.";
+            }
+        );
+    }
+
+    function fetchWeather(latitude, longitude, placeName) {
+        let error = document.getElementById("error");
+
+        let weatherUrl =
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
+            `&current=temperature_2m,wind_speed_10m,weather_code` +
+            `&daily=weather_code,temperature_2m_max,temperature_2m_min` +
+            `&timezone=auto`;
+
+        fetch(weatherUrl)
+            .then(response => response.json())
+            .then(weatherData => {
+                let current = weatherData.current;
+
+                document.getElementById("cityName").innerText = placeName;
+                document.getElementById("weatherIcon").innerText = getWeatherIcon(current.weather_code);
+                document.getElementById("temperature").innerText = current.temperature_2m + "°C";
+                document.getElementById("condition").innerText = "Condition: " + getWeatherCondition(current.weather_code);
+                document.getElementById("wind").innerText = "Wind Speed: " + current.wind_speed_10m + " km/h";
+
+                showForecast(weatherData.daily);
+
+                document.getElementById("weatherBox").style.display = "block";
+            })
+            .catch(() => {
+                error.innerText = "Unable to fetch weather data.";
+            });
+    }
+
+    function showForecast(daily) {
+        let forecast = document.getElementById("forecast");
+        forecast.innerHTML = "";
+
+        for (let i = 0; i < 5; i++) {
+            let card = document.createElement("div");
+            card.className = "forecast-card";
+
+            let date = new Date(daily.time[i]);
+            let dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+
+            card.innerHTML = `
+                <strong>${dayName}</strong>
+                <div class="forecast-icon">${getWeatherIcon(daily.weather_code[i])}</div>
+                <div>${getWeatherCondition(daily.weather_code[i])}</div>
+                <div>${daily.temperature_2m_min[i]}°C - ${daily.temperature_2m_max[i]}°C</div>
+            `;
+
+            forecast.appendChild(card);
+        }
+    }
+
+    function getWeatherCondition(code) {
+        if (code === 0) return "Clear sky";
+        if (code === 1 || code === 2 || code === 3) return "Partly cloudy";
+        if (code === 45 || code === 48) return "Fog";
+        if (code >= 51 && code <= 67) return "Drizzle";
+        if (code >= 71 && code <= 77) return "Snow";
+        if (code >= 80 && code <= 82) return "Rain showers";
+        if (code >= 95 && code <= 99) return "Thunderstorm";
+        return "Unknown";
+    }
+
+    function getWeatherIcon(code) {
+        if (code === 0) return "☀️";
+        if (code === 1 || code === 2) return "🌤️";
+        if (code === 3) return "☁️";
+        if (code === 45 || code === 48) return "🌫️";
+        if (code >= 51 && code <= 67) return "🌦️";
+        if (code >= 71 && code <= 77) return "❄️";
+        if (code >= 80 && code <= 82) return "🌧️";
+        if (code >= 95 && code <= 99) return "⛈️";
+        return "🌡️";
+    }
+
+    document.getElementById("cityInput").addEventListener("keypress", function(e) {
+        if (e.key === "Enter") {
+            getWeather();
+        }
+    });
+</script>
+
+</body>
+</html>
